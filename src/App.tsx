@@ -1,6 +1,6 @@
 /* eslint-disable jsx-a11y/label-has-associated-control */
 /* eslint-disable jsx-a11y/control-has-associated-label */
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { UserWarning } from './UserWarning';
 import {
   getTodoError,
@@ -40,10 +40,46 @@ function getFilteredTodos(todos: Todo[], { status }: { status: TodoStatus }) {
 
 export const App: React.FC = () => {
   const [todos, setTodos] = useState<Todo[]>([]);
+  const [loadingTodoIds, setLoadingTodoIds] = useState<number[]>([]);
   const [statusFilter, setStatusFilter] = useState(TodoStatus.All);
 
   const { errorMessage, setErrorMessage, resetErrorMessage } =
     useErrorMessage();
+
+  const isTodoLoading = useCallback(
+    (todoId: number) => loadingTodoIds.includes(todoId),
+    [loadingTodoIds],
+  );
+
+  const handleToggleTodoLoading = useCallback(
+    (todoId: number) => {
+      if (isTodoLoading(todoId)) {
+        setLoadingTodoIds(current => current.filter(id => id !== todoId));
+      } else {
+        setLoadingTodoIds(current => [...current, todoId]);
+      }
+    },
+    [isTodoLoading],
+  );
+
+  const handleDeleteTodo = useCallback(
+    (todoId: number) => {
+      handleToggleTodoLoading(todoId);
+
+      todosService
+        .delete(todoId)
+        .then(() => {
+          setTodos(current => current.filter(todo => todo.id !== todoId));
+        })
+        .catch(() => {
+          setErrorMessage(getTodoError(TodosServiceError.UnableToDeleteTodo));
+        })
+        .finally(() => {
+          handleToggleTodoLoading(todoId);
+        });
+    },
+    [handleToggleTodoLoading, setErrorMessage],
+  );
 
   useEffect(() => {
     todosService
@@ -101,7 +137,12 @@ export const App: React.FC = () => {
           <>
             <section className="todoapp__main" data-cy="TodoList">
               {filteredTodos.map(todo => (
-                <TodoItem key={todo.id} todo={todo} />
+                <TodoItem
+                  key={todo.id}
+                  todo={todo}
+                  onDelete={handleDeleteTodo}
+                  loading={isTodoLoading(todo.id)}
+                />
               ))}
             </section>
 

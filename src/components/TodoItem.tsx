@@ -3,9 +3,11 @@ import type { Todo } from '../types/Todo';
 
 type TodoProps = {
   todo: Todo;
+  loading: boolean;
+  onDelete: (todoId: number) => void;
 };
 
-export function TodoItem({ todo }: TodoProps) {
+export function TodoItem({ todo, loading = false, onDelete }: TodoProps) {
   return (
     <div
       data-cy="Todo"
@@ -27,8 +29,12 @@ export function TodoItem({ todo }: TodoProps) {
         {todo.title}
       </span>
 
-      {/* Remove button appears only on hover */}
-      <button type="button" className="todo__remove" data-cy="TodoDelete">
+      <button
+        type="button"
+        className="todo__remove"
+        data-cy="TodoDelete"
+        onClick={() => onDelete(todo.id)}
+      >
         ×
       </button>
 
@@ -44,11 +50,16 @@ export function TodoItem({ todo }: TodoProps) {
       </form> */}
 
       {/* 'is-active' class puts this modal on top of the todo */}
-      {/* overlay will cover the todo while it is being deleted or updated */}
-      {/* <div data-cy="TodoLoader" className="modal overlay">
+
+      <div
+        data-cy="TodoLoader"
+        className={cn('modal overlay', {
+          'is-active': loading,
+        })}
+      >
         <div className="modal-background has-background-white-ter" />
         <div className="loader" />
-      </div> */}
+      </div>
     </div>
   );
 }
