@@ -4,10 +4,14 @@ import type { Todo } from '../types/Todo';
 type TodoProps = {
   todo: Todo;
   loading: boolean;
-  onDelete: (todoId: number) => void;
+  onDelete?: (todoId: number) => void;
 };
 
-export function TodoItem({ todo, loading = false, onDelete }: TodoProps) {
+export function TodoItem({
+  todo,
+  loading = false,
+  onDelete = () => undefined,
+}: TodoProps) {
   return (
     <div
       data-cy="Todo"

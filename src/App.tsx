@@ -1,6 +1,6 @@
 /* eslint-disable jsx-a11y/label-has-associated-control */
 /* eslint-disable jsx-a11y/control-has-associated-label */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { UserWarning } from './UserWarning';
 import {
   getTodoError,
@@ -16,6 +16,8 @@ import { StatusFilter, TodoStatus } from './components/StatusFilter';
 import { getSortedTodos } from './utils/getSortedTodos';
 
 import cn from 'classnames';
+import { AddTodoForm, AddTodoFormData } from './components/AddTodoForm';
+import { TodoCreate } from './types/TodoCreate';
 
 function getFilteredTodos(todos: Todo[], { status }: { status: TodoStatus }) {
   let filteredTodos = todos;
@@ -41,7 +43,9 @@ function getFilteredTodos(todos: Todo[], { status }: { status: TodoStatus }) {
 export const App: React.FC = () => {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [loadingTodoIds, setLoadingTodoIds] = useState<number[]>([]);
+  const [tempTodo, setTempTodo] = useState<Todo | null>(null);
   const [statusFilter, setStatusFilter] = useState(TodoStatus.All);
+  const newTodoTitleRef = useRef<HTMLInputElement>(null);
 
   const { errorMessage, setErrorMessage, resetErrorMessage } =
     useErrorMessage();
@@ -79,9 +83,11 @@ export const App: React.FC = () => {
         })
         .finally(() => {
           handleToggleTodoLoading(todoId);
+
+          newTodoTitleRef.current?.focus();
         });
     },
-    [handleToggleTodoLoading, setErrorMessage],
+    [newTodoTitleRef, handleToggleTodoLoading, setErrorMessage],
   );
 
   const handleClearCompleted = useCallback(() => {
@@ -89,6 +95,45 @@ export const App: React.FC = () => {
       handleDeleteTodo(todo.id);
     });
   }, [completedTodos, handleDeleteTodo]);
+
+  const handleCreateTodo = useCallback(
+    (values: AddTodoFormData, clear: () => void) => {
+      if (newTodoTitleRef.current) {
+        newTodoTitleRef.current.disabled = true;
+      }
+
+      const createTodoDto: TodoCreate = {
+        title: values.title,
+        userId: USER_ID,
+        completed: false,
+      };
+
+      setTempTodo({
+        id: 0,
+        ...createTodoDto,
+      });
+
+      todosService
+        .create(createTodoDto)
+        .then(createdTodo => {
+          setTodos(current => [...current, createdTodo]);
+          clear();
+        })
+        .catch(() => {
+          setErrorMessage(getTodoError(TodosServiceError.UnableToAddTodo));
+        })
+        .finally(() => {
+          setTempTodo(null);
+
+          if (newTodoTitleRef.current) {
+            newTodoTitleRef.current.disabled = false;
+          }
+
+          newTodoTitleRef.current?.focus();
+        });
+    },
+    [newTodoTitleRef, setErrorMessage],
+  );
 
   useEffect(() => {
     todosService
@@ -129,15 +174,11 @@ export const App: React.FC = () => {
             />
           )}
 
-          {/* Add a todo on form submit */}
-          <form>
-            <input
-              data-cy="NewTodoField"
-              type="text"
-              className="todoapp__new-todo"
-              placeholder="What needs to be done?"
-            />
-          </form>
+          <AddTodoForm
+            ref={newTodoTitleRef}
+            onError={setErrorMessage}
+            onSubmit={handleCreateTodo}
+          />
         </header>
 
         {showTodosAndFooter && (
@@ -151,6 +192,8 @@ export const App: React.FC = () => {
                   loading={isTodoLoading(todo.id)}
                 />
               ))}
+
+              {tempTodo && <TodoItem todo={tempTodo} loading />}
             </section>
 
             <footer className="todoapp__footer" data-cy="Footer">
