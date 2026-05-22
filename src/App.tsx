@@ -46,6 +46,9 @@ export const App: React.FC = () => {
   const { errorMessage, setErrorMessage, resetErrorMessage } =
     useErrorMessage();
 
+  const { completed: completedTodos, active: activeTodos } =
+    getSortedTodos(todos);
+
   const isTodoLoading = useCallback(
     (todoId: number) => loadingTodoIds.includes(todoId),
     [loadingTodoIds],
@@ -81,6 +84,12 @@ export const App: React.FC = () => {
     [handleToggleTodoLoading, setErrorMessage],
   );
 
+  const handleClearCompleted = useCallback(() => {
+    completedTodos.forEach(todo => {
+      handleDeleteTodo(todo.id);
+    });
+  }, [completedTodos, handleDeleteTodo]);
+
   useEffect(() => {
     todosService
 
@@ -92,13 +101,11 @@ export const App: React.FC = () => {
       .finally();
   }, [setErrorMessage]);
 
+  const filteredTodos = getFilteredTodos(todos, { status: statusFilter });
+
   const showTodosAndFooter = todos.length > 0;
   const showToggleAllButton = todos.length > 0;
-
-  const filteredTodos = getFilteredTodos(todos, { status: statusFilter });
-  const { completed: completedTodos, active: activeTodos } =
-    getSortedTodos(todos);
-
+  const showClearCompletedButton = completedTodos.length > 0;
   const activeTodosAmount = activeTodos.length;
   const shouldToggleButtonBeActive = completedTodos.length === todos.length;
 
@@ -156,11 +163,12 @@ export const App: React.FC = () => {
                 onValueChange={setStatusFilter}
               />
 
-              {/* this button should be disabled if there are no completed todos */}
               <button
                 type="button"
                 className="todoapp__clear-completed"
                 data-cy="ClearCompletedButton"
+                disabled={!showClearCompletedButton}
+                onClick={handleClearCompleted}
               >
                 Clear completed
               </button>
