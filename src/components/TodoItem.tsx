@@ -1,17 +1,71 @@
 import cn from 'classnames';
 import type { Todo } from '../types/Todo';
+import { TodoUpdate } from '../types/TodoUpdate';
+import { useCallback, useState } from 'react';
+import { RenameTodoForm } from './RenameTodoForm';
 
 type TodoProps = {
   todo: Todo;
   loading: boolean;
   onDelete?: (todoId: number) => void;
+  onUpdate?: (
+    todoId: number,
+    data: TodoUpdate,
+    callbacks?: {
+      onSuccess?: (updatedTodo: Todo) => void;
+      onError?: () => void;
+    },
+  ) => void;
 };
 
 export function TodoItem({
   todo,
   loading = false,
   onDelete = () => undefined,
+  onUpdate = () => undefined,
 }: TodoProps) {
+  const [renaming, setRenaming] = useState(false);
+
+  const handleToggleStatus = useCallback(
+    (completed: boolean) => {
+      const { id, ...updatedTodo }: Todo = {
+        ...todo,
+        completed,
+      };
+
+      onUpdate(id, {
+        title: updatedTodo.title,
+        completed: updatedTodo.completed,
+        userId: updatedTodo.userId,
+      });
+    },
+    [todo, onUpdate],
+  );
+
+  const handleRenameTodo = useCallback(
+    (title: string) => {
+      const { id, ...updatedTodo }: Todo = {
+        ...todo,
+        title,
+      };
+
+      onUpdate(
+        id,
+        {
+          title: updatedTodo.title,
+          completed: updatedTodo.completed,
+          userId: updatedTodo.userId,
+        },
+        {
+          onSuccess: () => {
+            setRenaming(false);
+          },
+        },
+      );
+    },
+    [todo, onUpdate],
+  );
+
   return (
     <div
       data-cy="Todo"
@@ -26,34 +80,37 @@ export function TodoItem({
           type="checkbox"
           className="todo__status"
           checked={todo.completed}
+          onChange={event => handleToggleStatus(event.target.checked)}
         />
       </label>
 
-      <span data-cy="TodoTitle" className="todo__title">
-        {todo.title}
-      </span>
-
-      <button
-        type="button"
-        className="todo__remove"
-        data-cy="TodoDelete"
-        onClick={() => onDelete(todo.id)}
-      >
-        ×
-      </button>
-
-      {/* This form is shown instead of the title and remove button */}
-      {/* <form>
-        <input
-          data-cy="TodoTitleField"
-          type="text"
-          className="todo__title-field"
-          placeholder="Empty todo will be deleted"
-          value="Todo is being edited now"
+      {renaming ? (
+        <RenameTodoForm
+          defaultValue={todo.title}
+          onSubmit={handleRenameTodo}
+          onClose={() => setRenaming(false)}
+          onDelete={() => onDelete(todo.id)}
         />
-      </form> */}
+      ) : (
+        <>
+          <span
+            data-cy="TodoTitle"
+            className="todo__title"
+            onDoubleClick={() => setRenaming(true)}
+          >
+            {todo.title}
+          </span>
 
-      {/* 'is-active' class puts this modal on top of the todo */}
+          <button
+            type="button"
+            className="todo__remove"
+            data-cy="TodoDelete"
+            onClick={() => onDelete(todo.id)}
+          >
+            ×
+          </button>
+        </>
+      )}
 
       <div
         data-cy="TodoLoader"

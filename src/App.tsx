@@ -18,6 +18,8 @@ import { getSortedTodos } from './utils/getSortedTodos';
 import cn from 'classnames';
 import { AddTodoForm, AddTodoFormData } from './components/AddTodoForm';
 import { TodoCreate } from './types/TodoCreate';
+import { TodoUpdate } from './types/TodoUpdate';
+import { useLoadingIds } from './hooks/useLoadingTodoIds';
 
 function getFilteredTodos(todos: Todo[], { status }: { status: TodoStatus }) {
   let filteredTodos = todos;
@@ -42,7 +44,6 @@ function getFilteredTodos(todos: Todo[], { status }: { status: TodoStatus }) {
 
 export const App: React.FC = () => {
   const [todos, setTodos] = useState<Todo[]>([]);
-  const [loadingTodoIds, setLoadingTodoIds] = useState<number[]>([]);
   const [tempTodo, setTempTodo] = useState<Todo | null>(null);
   const [statusFilter, setStatusFilter] = useState(TodoStatus.All);
   const newTodoTitleRef = useRef<HTMLInputElement>(null);
@@ -50,28 +51,18 @@ export const App: React.FC = () => {
   const { errorMessage, setErrorMessage, resetErrorMessage } =
     useErrorMessage();
 
+  const {
+    isIdLoading: isTodoLoading,
+    addToLoading: handleAddToLoading,
+    removeFromLoading: handleRemoveFromLoading,
+  } = useLoadingIds<number>();
+
   const { completed: completedTodos, active: activeTodos } =
     getSortedTodos(todos);
 
-  const isTodoLoading = useCallback(
-    (todoId: number) => loadingTodoIds.includes(todoId),
-    [loadingTodoIds],
-  );
-
-  const handleToggleTodoLoading = useCallback(
-    (todoId: number) => {
-      if (isTodoLoading(todoId)) {
-        setLoadingTodoIds(current => current.filter(id => id !== todoId));
-      } else {
-        setLoadingTodoIds(current => [...current, todoId]);
-      }
-    },
-    [isTodoLoading],
-  );
-
   const handleDeleteTodo = useCallback(
     (todoId: number) => {
-      handleToggleTodoLoading(todoId);
+      handleAddToLoading(todoId);
 
       todosService
         .delete(todoId)
@@ -82,12 +73,17 @@ export const App: React.FC = () => {
           setErrorMessage(getTodoError(TodosServiceError.UnableToDeleteTodo));
         })
         .finally(() => {
-          handleToggleTodoLoading(todoId);
+          handleRemoveFromLoading(todoId);
 
           newTodoTitleRef.current?.focus();
         });
     },
-    [newTodoTitleRef, handleToggleTodoLoading, setErrorMessage],
+    [
+      newTodoTitleRef,
+      handleAddToLoading,
+      handleRemoveFromLoading,
+      setErrorMessage,
+    ],
   );
 
   const handleClearCompleted = useCallback(() => {
@@ -97,7 +93,13 @@ export const App: React.FC = () => {
   }, [completedTodos, handleDeleteTodo]);
 
   const handleCreateTodo = useCallback(
-    (values: AddTodoFormData, clear: () => void) => {
+    (
+      values: AddTodoFormData,
+      {
+        onSuccess,
+        onError,
+      }: { onSuccess?: (createdTodo: Todo) => void; onError?: () => void } = {},
+    ) => {
       if (newTodoTitleRef.current) {
         newTodoTitleRef.current.disabled = true;
       }
@@ -117,10 +119,13 @@ export const App: React.FC = () => {
         .create(createTodoDto)
         .then(createdTodo => {
           setTodos(current => [...current, createdTodo]);
-          clear();
+
+          onSuccess?.(createdTodo);
         })
         .catch(() => {
           setErrorMessage(getTodoError(TodosServiceError.UnableToAddTodo));
+
+          onError?.();
         })
         .finally(() => {
           setTempTodo(null);
@@ -134,6 +139,62 @@ export const App: React.FC = () => {
     },
     [newTodoTitleRef, setErrorMessage],
   );
+
+  const handleUpdateTodo = useCallback(
+    (
+      todoId: number,
+      data: TodoUpdate,
+      {
+        onSuccess,
+        onError,
+      }: { onSuccess?: (updatedTodo: Todo) => void; onError?: () => void } = {},
+    ) => {
+      handleAddToLoading(todoId);
+
+      todosService
+        .update(todoId, data)
+        .then(updatedTodo => {
+          setTodos(current =>
+            current.map(todo => {
+              return todo.id === updatedTodo.id ? updatedTodo : todo;
+            }),
+          );
+
+          onSuccess?.(updatedTodo);
+        })
+        .catch(() => {
+          setErrorMessage(getTodoError(TodosServiceError.UnableToUpdateTodo));
+
+          onError?.();
+        })
+        .finally(() => {
+          handleRemoveFromLoading(todoId);
+        });
+    },
+    [handleAddToLoading, handleRemoveFromLoading, setErrorMessage],
+  );
+
+  const handleBulkToggleStatus = useCallback(() => {
+    if (activeTodos.length !== 0) {
+      activeTodos.forEach(({ id, ...todo }) => {
+        handleUpdateTodo(id, {
+          title: todo.title,
+          userId: todo.userId,
+          completed: !todo.completed,
+        });
+      });
+
+      return;
+    }
+
+    todos.forEach(({ id, ...todo }) => {
+      handleUpdateTodo(id, {
+        title: todo.title,
+        userId: todo.userId,
+        completed: !todo.completed,
+      });
+    });
+  }, [todos, activeTodos, handleUpdateTodo]);
 
   useEffect(() => {
     todosService
@@ -171,6 +232,7 @@ export const App: React.FC = () => {
                 active: shouldToggleButtonBeActive,
               })}
               data-cy="ToggleAllButton"
+              onClick={handleBulkToggleStatus}
             />
           )}
 
@@ -188,8 +250,9 @@ export const App: React.FC = () => {
                 <TodoItem
                   key={todo.id}
                   todo={todo}
-                  onDelete={handleDeleteTodo}
                   loading={isTodoLoading(todo.id)}
+                  onDelete={handleDeleteTodo}
+                  onUpdate={handleUpdateTodo}
                 />
               ))}
 

@@ -1,12 +1,19 @@
 import { FormEventHandler, forwardRef, useCallback, useState } from 'react';
 import { getTodoError, TodosServiceError } from '../api/todos';
+import { Todo } from '../types/Todo';
 
 export type AddTodoFormData = {
   title: string;
 };
 
 type AddTodoFormProps = {
-  onSubmit: (values: AddTodoFormData, clear: () => void) => void;
+  onSubmit: (
+    values: AddTodoFormData,
+    callbacks?: {
+      onSuccess?: (createdTodo: Todo) => void;
+      onError?: () => void;
+    },
+  ) => void;
   onError: (notification: string) => void;
 };
 
@@ -27,7 +34,14 @@ export const AddTodoForm = forwardRef<HTMLInputElement, AddTodoFormProps>(
         return;
       }
 
-      onSubmit({ title: preparedNewTodoTile }, clearTodoTitle);
+      onSubmit(
+        { title: preparedNewTodoTile },
+        {
+          onSuccess: () => {
+            clearTodoTitle();
+          },
+        },
+      );
     };
 
     return (
